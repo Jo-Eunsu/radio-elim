@@ -378,24 +378,62 @@
     let audioEl = window.audioEl || new Audio();
     window.audioEl = audioEl;
 
+    // 잠금화면 / 제어센터에 현재 회차명을 표시
+    function decodeHtml(text) {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text || '';
+        return textarea.value;
+    }
+
+    function updateNowPlayingInfo(ep) {
+        if (!ep) return;
+
+        const episodeTitle = decodeHtml(ep.title);
+        const sectionName = currentEpisodeTab === 'radio' ? '라디오 엘림' : '주일말씀';
+
+        // iOS WKWebView는 웹페이지 제목을 잠금화면 재생 제목으로 사용하는 경우가 있어
+        // 재생 직전에 현재 회차명으로 페이지 제목과 audio title을 모두 갱신한다.
+        document.title = episodeTitle;
+        audioEl.title = episodeTitle;
+        audioEl.setAttribute('title', episodeTitle);
+        audioEl.setAttribute('aria-label', episodeTitle);
+
+        // Media Session API를 지원하는 환경에서는 더 자세한 메타데이터도 함께 전달한다.
+        if ('mediaSession' in navigator && 'MediaMetadata' in window) {
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: episodeTitle,
+                    artist: sectionName,
+                    album: '생명의말씀선교회 광주교회'
+                });
+            } catch (e) {
+                console.log('Media Session metadata 설정 불가:', e);
+            }
+        }
+    }
+
     // 오디오 이벤트 바인딩
     audioEl.onended = () => { playAdjacent(1); };
     audioEl.ontimeupdate = () => { updatePlayerProgress(); };
-    audioEl.onloadedmetadata = () => { updatePlayerProgress(); };
+    audioEl.onloadedmetadata = () => {
+        updatePlayerProgress();
+        if (currentEpisode) updateNowPlayingInfo(currentEpisode);
+    };
     audioEl.ondurationchange = () => { updatePlayerProgress(); };
     audioEl.onplay = () => {
+        if (currentEpisode) updateNowPlayingInfo(currentEpisode);
         isPlaying = true;
+        syncPlayingUI();
         if ('mediaSession' in navigator) {
             try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
         }
-        syncPlayingUI();
     };
     audioEl.onpause = () => {
         isPlaying = false;
+        syncPlayingUI();
         if ('mediaSession' in navigator) {
             try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
         }
-        syncPlayingUI();
     };
 
     window.addEventListener('DOMContentLoaded', render);
@@ -467,6 +505,7 @@
         if (!ep) return;
         currentEpisode = ep;
         currentEpisodeTab = tab;
+        updateNowPlayingInfo(ep);
         navigate('player');
         playEpisode(ep);
     }
@@ -698,47 +737,26 @@
     }
 
     // ---------------- Player logic ----------------
-    // iPhone 잠금화면 / 제어센터에 현재 재생 중인 회차 정보를 표시
-    function updateNowPlaying(ep) {
-        if (!ep) return;
-
-        // iOS가 웹 페이지 제목을 사용하는 경우를 위한 보조 처리
-        document.title = ep.title;
-
-        // Media Session API를 지원하는 환경에서는 회차 정보를 직접 전달
-        if ('mediaSession' in navigator && 'MediaMetadata' in window) {
-            try {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: ep.title,
-                    artist: currentEpisodeTab === 'radio' ? '라디오 엘림' : '주일말씀',
-                    album: '생명의말씀선교회 광주교회',
-                    artwork: [
-                        { src: new URL('elim_logo.png', window.location.href).href }
-                    ]
-                });
-            } catch (err) {
-                console.log('잠금화면 회차정보 설정 오류:', err);
-            }
-        }
-    }
-
     function playEpisode(ep) {
-        // 음원을 재생하기 전에 잠금화면/제어센터 정보를 현재 회차로 갱신
-        updateNowPlaying(ep);
+        // 중요: 오디오를 재생하기 전에 제목을 먼저 바꿔야
+        // iPhone 잠금화면이 "라디오 엘림" 대신 현재 회차명을 잡기 쉽다.
+        updateNowPlayingInfo(ep);
 
         if (audioEl.src !== ep.src) {
             audioEl.src = ep.src;
             audioEl.load();
         }
+
+        // src/load 뒤에도 한 번 더 적용
+        updateNowPlayingInfo(ep);
+
         audioEl.playbackRate = currentSpeed;
         const p = audioEl.play();
         if (p !== undefined) {
             p.then(() => { 
+                updateNowPlayingInfo(ep);
                 isPlaying = true; 
-                if ('mediaSession' in navigator) {
-                    try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
-                }
-                syncPlayingUI(); 
+                syncPlayingUI();
             }).catch((err) => { 
                 console.log("재생 오류 방어:", err);
                 isPlaying = false; 
@@ -814,17 +832,36 @@
         audioEl.pause();
         isPlaying = false;
         currentEpisode = null;
-
-        // 재생을 완전히 종료하면 페이지 제목과 Media Session 정보도 초기화
         document.title = '라디오 엘림';
-        if ('mediaSession' in navigator) {
-            try {
-                navigator.mediaSession.metadata = null;
-                navigator.mediaSession.playbackState = 'none';
-            } catch (e) {}
-        }
-
         updateMiniPlayer();
+    }
+
+    // 잠금화면 / 제어센터 버튼 제어
+    if ('mediaSession' in navigator) {
+        try {
+            navigator.mediaSession.setActionHandler('play', () => {
+                if (!currentEpisode) return;
+                updateNowPlayingInfo(currentEpisode);
+                audioEl.play().catch(() => {});
+            });
+            navigator.mediaSession.setActionHandler('pause', () => {
+                audioEl.pause();
+            });
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                skipSeconds(-(details.seekOffset || 10));
+            });
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                skipSeconds(details.seekOffset || 10);
+            });
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                playAdjacent(-1);
+            });
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                playAdjacent(1);
+            });
+        } catch (e) {
+            console.log('Media Session 버튼 설정 불가:', e);
+        }
     }
     </script>
 </body>
