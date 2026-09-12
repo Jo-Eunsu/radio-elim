@@ -383,8 +383,20 @@
     audioEl.ontimeupdate = () => { updatePlayerProgress(); };
     audioEl.onloadedmetadata = () => { updatePlayerProgress(); };
     audioEl.ondurationchange = () => { updatePlayerProgress(); };
-    audioEl.onplay = () => { isPlaying = true; syncPlayingUI(); };
-    audioEl.onpause = () => { isPlaying = false; syncPlayingUI(); };
+    audioEl.onplay = () => {
+        isPlaying = true;
+        if ('mediaSession' in navigator) {
+            try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+        }
+        syncPlayingUI();
+    };
+    audioEl.onpause = () => {
+        isPlaying = false;
+        if ('mediaSession' in navigator) {
+            try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
+        }
+        syncPlayingUI();
+    };
 
     window.addEventListener('DOMContentLoaded', render);
 
@@ -686,7 +698,34 @@
     }
 
     // ---------------- Player logic ----------------
+    // iPhone 잠금화면 / 제어센터에 현재 재생 중인 회차 정보를 표시
+    function updateNowPlaying(ep) {
+        if (!ep) return;
+
+        // iOS가 웹 페이지 제목을 사용하는 경우를 위한 보조 처리
+        document.title = ep.title;
+
+        // Media Session API를 지원하는 환경에서는 회차 정보를 직접 전달
+        if ('mediaSession' in navigator && 'MediaMetadata' in window) {
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: ep.title,
+                    artist: currentEpisodeTab === 'radio' ? '라디오 엘림' : '주일말씀',
+                    album: '생명의말씀선교회 광주교회',
+                    artwork: [
+                        { src: new URL('elim_logo.png', window.location.href).href }
+                    ]
+                });
+            } catch (err) {
+                console.log('잠금화면 회차정보 설정 오류:', err);
+            }
+        }
+    }
+
     function playEpisode(ep) {
+        // 음원을 재생하기 전에 잠금화면/제어센터 정보를 현재 회차로 갱신
+        updateNowPlaying(ep);
+
         if (audioEl.src !== ep.src) {
             audioEl.src = ep.src;
             audioEl.load();
@@ -696,6 +735,9 @@
         if (p !== undefined) {
             p.then(() => { 
                 isPlaying = true; 
+                if ('mediaSession' in navigator) {
+                    try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+                }
                 syncPlayingUI(); 
             }).catch((err) => { 
                 console.log("재생 오류 방어:", err);
@@ -772,6 +814,16 @@
         audioEl.pause();
         isPlaying = false;
         currentEpisode = null;
+
+        // 재생을 완전히 종료하면 페이지 제목과 Media Session 정보도 초기화
+        document.title = '라디오 엘림';
+        if ('mediaSession' in navigator) {
+            try {
+                navigator.mediaSession.metadata = null;
+                navigator.mediaSession.playbackState = 'none';
+            } catch (e) {}
+        }
+
         updateMiniPlayer();
     }
     </script>
