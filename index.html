@@ -404,7 +404,14 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: episodeTitle,
                     artist: sectionName,
-                    album: '생명의말씀선교회 광주교회'
+                    album: '생명의말씀선교회 광주교회',
+                    artwork: [
+                        {
+                            src: new URL('nowplaying_logo.png', window.location.href).href,
+                            sizes: '1024x1024',
+                            type: 'image/png'
+                        }
+                    ]
                 });
             } catch (e) {
                 console.log('Media Session metadata 설정 불가:', e);
