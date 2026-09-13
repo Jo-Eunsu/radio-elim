@@ -261,6 +261,226 @@
             border-color: rgba(203,213,225,.95) !important;
         }
 
+        /* 최신 콘텐츠 NEW 배지 */
+        .new-badge {
+            display: inline-flex;
+            align-items: center;
+            height: 18px;
+            padding: 0 7px;
+            margin-left: 6px;
+            border-radius: 999px;
+            font-size: 9px;
+            line-height: 1;
+            font-weight: 800;
+            letter-spacing: .04em;
+            vertical-align: middle;
+        }
+
+        .theme-radio .new-badge {
+            color: #1e3a8a;
+            background: rgba(219,234,254,.92);
+            border: 1px solid rgba(147,197,253,.55);
+        }
+
+        .theme-sermon .new-badge {
+            color: #7c5a13;
+            background: rgba(254,249,195,.92);
+            border: 1px solid rgba(234,179,8,.22);
+        }
+
+        /* 목록의 현재 재생 중 회차 */
+        .episode-card.now-playing {
+            position: relative;
+        }
+
+        /* 회차 썸네일 */
+        .episode-thumb {
+            width: 96px;
+            aspect-ratio: 16 / 9;
+            height: auto;
+            object-fit: cover;
+            border-radius: 10px;
+            flex-shrink: 0;
+            background: #f1f5f9;
+            border: 1px solid rgba(226,232,240,.95);
+        }
+
+        .hero-thumb {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 14px;
+            margin-bottom: 14px;
+            background: #f8fafc;
+            border: 1px solid rgba(226,232,240,.9);
+        }
+
+        .player-art-card {
+            width: min(100%, 340px) !important;
+            height: auto !important;
+            aspect-ratio: 16 / 9;
+        }
+
+        .player-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: inherit;
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .player-thumb-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background: linear-gradient(
+                180deg,
+                rgba(15,23,42,.05),
+                rgba(15,23,42,.42)
+            );
+            pointer-events: none;
+        }
+
+        .player-thumb-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .favorite-thumb {
+            width: 96px;
+            aspect-ratio: 16 / 9;
+            height: auto;
+            object-fit: cover;
+            border-radius: 10px;
+            flex-shrink: 0;
+            background: #f8fafc;
+            border: 1px solid rgba(226,232,240,.9);
+        }
+
+        @media (max-width: 390px) {
+            .episode-thumb,
+            .favorite-thumb {
+                width: 88px;
+            }
+        }
+
+        .theme-radio .episode-card.now-playing {
+            background: rgba(239,246,255,.94) !important;
+            border-color: rgba(59,130,246,.42) !important;
+            box-shadow: 0 7px 20px rgba(59,130,246,.08);
+        }
+
+        .theme-sermon .episode-card.now-playing {
+            background: rgba(255,251,235,.95) !important;
+            border-color: rgba(217,170,45,.38) !important;
+            box-shadow: 0 7px 20px rgba(217,170,45,.08);
+        }
+
+        .playing-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 3px;
+            font-size: 9px;
+            font-weight: 800;
+        }
+
+        .theme-radio .playing-label { color: #2563eb; }
+        .theme-sermon .playing-label { color: #a16207; }
+
+        .playing-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+            animation: playingDot 1.15s ease-in-out infinite;
+        }
+
+        .theme-radio .playing-dot { background: #3b82f6; }
+        .theme-sermon .playing-dot { background: #d9aa2d; }
+
+        @keyframes playingDot {
+            0%,100% { opacity: .38; transform: scale(.82); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        /* 미니 플레이어 이퀄라이저 */
+        .mini-eq {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 2px;
+            width: 18px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .mini-eq span {
+            width: 3px;
+            border-radius: 99px;
+            height: 5px;
+            transform-origin: bottom;
+            animation: eqBounce .72s ease-in-out infinite alternate;
+        }
+
+        .mini-eq span:nth-child(2) { animation-delay: -.24s; }
+        .mini-eq span:nth-child(3) { animation-delay: -.46s; }
+
+        .mini-eq.paused span {
+            animation-play-state: paused;
+            height: 4px;
+            opacity: .45;
+        }
+
+        #mini-player.radio-mini .mini-eq span { background: #3b82f6; }
+        #mini-player.sermon-mini .mini-eq span { background: #d9aa2d; }
+
+        #mini-player.radio-mini #mini-play-btn {
+            background: #172554 !important;
+        }
+
+        #mini-player.sermon-mini #mini-play-btn {
+            background: #b88920 !important;
+        }
+
+        @keyframes eqBounce {
+            0% { height: 4px; opacity: .65; }
+            100% { height: 15px; opacity: 1; }
+        }
+
+        /* 플레이어 진행바: 재생된 구간만 테마색 */
+        #progress-slider {
+            --progress: 0%;
+            --track-color: #e2e8f0;
+            --active-color: #2563eb;
+        }
+
+        #progress-slider::-webkit-slider-runnable-track {
+            background:
+                linear-gradient(
+                    90deg,
+                    var(--active-color) 0%,
+                    var(--active-color) var(--progress),
+                    var(--track-color) var(--progress),
+                    var(--track-color) 100%
+                );
+        }
+
+        #progress-slider::-webkit-slider-thumb {
+            background: var(--active-color);
+        }
+
+        #progress-slider.radio-progress { --active-color: #2563eb; }
+        #progress-slider.sermon-progress { --active-color: #d9aa2d; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .mini-eq span,
+            .playing-dot {
+                animation: none !important;
+            }
+        }
+
         #search-input {
             background: rgba(255,255,255,.74) !important;
             backdrop-filter: blur(10px);
@@ -442,6 +662,9 @@
         <!-- MINI PLAYER -->
         <div id="mini-player" class="hidden absolute bottom-16 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 flex items-center justify-between z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
             <div class="flex items-center space-x-3 cursor-pointer flex-1 mr-2 min-w-0" onclick="openPlayerFromMini()">
+                <div id="mini-eq" class="mini-eq paused" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </div>
                 <div class="min-w-0 flex-1">
                     <h4 id="mini-title" class="text-sm font-semibold truncate text-slate-800">-</h4>
                     <p id="mini-date" class="text-xs text-slate-500 truncate">-</p>
@@ -849,6 +1072,10 @@
         const dur = audioEl.duration || 0;
         slider.max = dur || 100;
         slider.value = audioEl.currentTime || 0;
+
+        const percent = dur > 0 ? Math.max(0, Math.min(100, (audioEl.currentTime / dur) * 100)) : 0;
+        slider.style.setProperty('--progress', `${percent}%`);
+
         curLabel.innerText = formatTime(audioEl.currentTime || 0);
         durLabel.innerText = formatTime(dur);
     }
@@ -858,11 +1085,56 @@
         updatePlayerProgress();
     }
 
+    // ---------------- YouTube 썸네일 ----------------
+    // 아래 회차별 YouTube 영상 ID만 채우면 자동으로 썸네일이 적용됩니다.
+    // 예: 유튜브 주소가 https://www.youtube.com/watch?v=ABC123xyz 이면
+    //     222: 'ABC123xyz'
+    const radioYouTubeIds = {
+        // 222: '',
+        // 221: '',
+        // 220: '',
+    };
+
+    function youtubeThumbnailFromId(videoId) {
+        if (!videoId) return '';
+        return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    }
+
+    function getEpisodeThumbnail(ep, tab) {
+        // 회차 데이터에 thumbnail 주소를 직접 넣어둔 경우 우선 사용
+        if (ep && ep.thumbnail) return ep.thumbnail;
+
+        // 라디오 엘림은 회차 번호에 연결한 유튜브 영상 ID 사용
+        if (tab === 'radio') {
+            const videoId = radioYouTubeIds[ep.num];
+            if (videoId) return youtubeThumbnailFromId(videoId);
+        }
+
+        // 썸네일이 아직 없는 회차는 기본 ELIM 로고
+        return 'elim_logo.png';
+    }
+
+    function thumbFallback(img) {
+        img.onerror = null;
+        img.src = 'elim_logo.png';
+        img.style.objectFit = 'contain';
+        img.style.padding = '8px';
+        img.style.background = '#ffffff';
+    }
+
     function listFor(tab) { return tab === 'radio' ? radioEpisodes : sermonEpisodes; }
     function tabLabel(tab) { return tab === 'radio' ? '라디오 엘림' : '주일 말씀'; }
     function formatDateKo(d) {
         const [y, m, day] = d.split('-');
         return `${y}.${m}.${day}`;
+    }
+
+    function isNewEpisode(dateString) {
+        const episodeDate = new Date(`${dateString}T00:00:00`);
+        const now = new Date();
+        const diffMs = now - episodeDate;
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        return diffMs >= 0 && diffMs <= sevenDays;
     }
 
     function getFilteredSorted() {
@@ -907,7 +1179,7 @@
         const appEl = document.getElementById('app');
 
         if (appEl) {
-            const isFavorites = currentRoute !== 'player' && currentTab === 'favorites';
+            const isFavorites = currentRoute === 'favorites';
             const isSermonTheme = !isFavorites && relevantThemeTab === 'sermon';
             const isRadioTheme = !isFavorites && !isSermonTheme;
 
@@ -949,10 +1221,17 @@
             <div class="p-5 space-y-5">
                 <!-- HERO / LATEST -->
                 <div class="hero-card relative rounded-2xl overflow-hidden bg-white border border-slate-200 text-slate-800 p-5 cursor-pointer hover:border-blue-900/30 transition-all shadow-sm" onclick="openPlayer('${currentTab}','${latest.id}')">
+                    <img
+                        src="${getEpisodeThumbnail(latest, currentTab)}"
+                        alt="${latest.title}"
+                        class="hero-thumb"
+                        onerror="thumbFallback(this)"
+                    />
                     <div class="flex items-center justify-between mb-3">
                         <span class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-950 text-xs font-semibold">
                             <span class="w-2 h-2 rounded-full bg-blue-900 animate-pulse"></span>
                             <span>${currentTab === 'radio' ? '최신 회차' : '최신 말씀'}</span>
+                            ${isNewEpisode(latest.date) ? '<span class="new-badge">NEW</span>' : ''}
                         </span>
                         <span class="text-xs text-slate-400">${formatDateKo(latest.date)}</span>
                     </div>
@@ -987,15 +1266,25 @@
                         ${items.length === 0 ? `<p class="text-center text-slate-400 text-sm py-10">검색 결과가 없습니다 🙇</p>` :
                         items.map(ep => {
                             const isFav = favorites.includes(ep.id);
+                            const isCurrentPlaying = currentEpisode && currentEpisode.id === ep.id && currentEpisodeTab === currentTab;
                             return `
-                                <div onclick="openPlayer('${currentTab}','${ep.id}')" class="episode-card flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-900/30 cursor-pointer transition-all group">
+                                <div onclick="openPlayer('${currentTab}','${ep.id}')" class="episode-card ${isCurrentPlaying ? 'now-playing' : ''} flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-900/30 cursor-pointer transition-all group">
                                     <div class="flex items-center space-x-3 min-w-0">
-                                        <div class="w-11 h-11 rounded-lg bg-blue-950 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold shadow-sm">
-                                            ${String(ep.num).includes('.') ? '번외' : ep.num}
-                                        </div>
+                                        <img
+                                            src="${getEpisodeThumbnail(ep, currentTab)}"
+                                            alt="${ep.title}"
+                                            class="episode-thumb"
+                                            onerror="thumbFallback(this)"
+                                        />
                                         <div class="min-w-0">
-                                            <h4 class="font-semibold text-sm text-slate-800 truncate">${ep.title}</h4>
-                                            <p class="text-xs text-slate-500 truncate">${formatDateKo(ep.date)}</p>
+                                            <div class="flex items-center min-w-0">
+                                                <h4 class="font-semibold text-sm text-slate-800 truncate">${ep.title}</h4>
+                                                ${isNewEpisode(ep.date) ? '<span class="new-badge flex-shrink-0">NEW</span>' : ''}
+                                            </div>
+                                            <p class="text-xs text-slate-500 truncate">
+                                                ${String(ep.num).includes('.') ? '번외' : `${ep.num}회`} · ${formatDateKo(ep.date)}
+                                            </p>
+                                            ${isCurrentPlaying ? `<div class="playing-label"><span class="playing-dot"></span>${isPlaying ? '재생 중' : '선택된 회차'}</div>` : ''}
                                         </div>
                                     </div>
                                     <div class="flex items-center space-x-1 pl-2 flex-shrink-0">
@@ -1053,12 +1342,21 @@
 
                 <!-- 라디오 비주얼 카드 -->
                 <div class="w-full flex justify-center my-1">
-                    <div class="player-art-card ${playerTheme} w-56 h-56 bg-blue-950 rounded-3xl p-6 shadow-2xl text-white relative overflow-hidden flex flex-col items-center justify-center border border-blue-900">
-                        <div class="w-12 h-12 rounded-full border-2 border-white/80 flex items-center justify-center mb-4 ${isPlaying ? 'animate-pulse' : ''}">
-                            <div class="w-4 h-4 rounded-full bg-white shadow-sm"></div>
+                    <div class="player-art-card ${playerTheme} bg-blue-950 rounded-3xl shadow-2xl text-white relative overflow-hidden flex flex-col items-center justify-center border border-blue-900">
+                        <img
+                            src="${getEpisodeThumbnail(ep, currentEpisodeTab)}"
+                            alt="${ep.title}"
+                            class="player-thumb"
+                            onerror="thumbFallback(this)"
+                        />
+                        <div class="player-thumb-overlay"></div>
+                        <div class="player-thumb-content flex flex-col items-center justify-center p-6 w-full h-full">
+                            <div class="w-12 h-12 rounded-full border-2 border-white/80 flex items-center justify-center mb-4 ${isPlaying ? 'animate-pulse' : ''}">
+                                <div class="w-4 h-4 rounded-full bg-white shadow-sm"></div>
+                            </div>
+                            <span class="text-[11px] font-semibold text-white/75 tracking-widest mb-1">${playerSmallLabel}</span>
+                            <h3 class="text-lg font-bold tracking-tight text-white">${playerMainLabel}</h3>
                         </div>
-                        <span class="text-[11px] font-semibold text-white/75 tracking-widest mb-1">${playerSmallLabel}</span>
-                        <h3 class="text-lg font-bold tracking-tight text-white">${playerMainLabel}</h3>
                     </div>
                 </div>
 
@@ -1074,7 +1372,7 @@
                     <div>
                         <input id="progress-slider" type="range" min="0" max="100" value="0" step="0.1"
                             oninput="onSeekInput(this.value)"
-                            class="w-full h-1.5 rounded-lg cursor-pointer">
+                            class="${isSermon ? 'sermon-progress' : 'radio-progress'} w-full h-1.5 rounded-lg cursor-pointer">
                         <div class="flex items-center justify-between mt-2 text-xs font-semibold text-slate-400">
                             <span id="current-time-label">00:00</span>
                             <span id="duration-time-label">00:00</span>
@@ -1126,11 +1424,18 @@
                         ${favEps.map(ep => `
                             <div onclick="openPlayer('${ep.tab}','${ep.id}')" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-900/30 cursor-pointer shadow-sm">
                                 <div class="flex items-center space-x-3 min-w-0">
-                                    <div class="w-11 h-11 rounded-lg bg-blue-950 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold shadow-sm">${String(ep.num).includes('.') ? '번외' : ep.num}</div>
+                                    <img
+                                        src="${getEpisodeThumbnail(ep, ep.tab)}"
+                                        alt="${ep.title}"
+                                        class="favorite-thumb"
+                                        onerror="thumbFallback(this)"
+                                    />
                                     <div class="min-w-0">
                                         <span class="text-[10px] text-blue-900 font-semibold px-1.5 py-0.5 rounded bg-blue-50">${tabLabel(ep.tab)}</span>
                                         <h4 class="font-semibold text-sm text-slate-800 truncate mt-0.5">${ep.title}</h4>
-                                        <p class="text-xs text-slate-500 truncate">${formatDateKo(ep.date)}</p>
+                                        <p class="text-xs text-slate-500 truncate">
+                                            ${String(ep.num).includes('.') ? '번외' : `${ep.num}회`} · ${formatDateKo(ep.date)}
+                                        </p>
                                     </div>
                                 </div>
                                 <button onclick="event.stopPropagation(); toggleFavorite('${ep.id}')" class="text-rose-500 p-2 flex-shrink-0">
@@ -1226,8 +1531,17 @@
 
     function updateMiniPlayer() {
         const mini = document.getElementById('mini-player');
+        const eq = document.getElementById('mini-eq');
+
         if (currentEpisode && (isPlaying || currentRoute !== 'player')) {
             mini.classList.remove('hidden');
+            mini.classList.toggle('radio-mini', currentEpisodeTab === 'radio');
+            mini.classList.toggle('sermon-mini', currentEpisodeTab === 'sermon');
+
+            if (eq) {
+                eq.classList.toggle('paused', !isPlaying);
+            }
+
             document.getElementById('mini-title').innerText = currentEpisode.title;
             document.getElementById('mini-date').innerText = formatDateKo(currentEpisode.date);
             document.querySelector('#mini-play-btn i').className = isPlaying ? 'fa-solid fa-pause text-sm' : 'fa-solid fa-play text-sm ml-0.5';
