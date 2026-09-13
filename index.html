@@ -1154,6 +1154,7 @@
 
     // ---------------- YouTube 썸네일 자동 연결 ----------------
     let radioThumbnailMap = {};
+    let sermonThumbnailMap = {};
 
     async function loadYouTubeThumbnails() {
         try {
@@ -1164,7 +1165,18 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             const data = await res.json();
-            radioThumbnailMap = data && typeof data === 'object' ? data : {};
+
+            // 새 통합 JSON 형식 지원:
+            // { "radio": {...}, "sermon": {...} }
+            if (data && typeof data === 'object' && (data.radio || data.sermon)) {
+                radioThumbnailMap = data.radio && typeof data.radio === 'object' ? data.radio : {};
+                sermonThumbnailMap = data.sermon && typeof data.sermon === 'object' ? data.sermon : {};
+            } else {
+                // 기존 라디오 전용 JSON도 계속 지원
+                radioThumbnailMap = data && typeof data === 'object' ? data : {};
+                sermonThumbnailMap = {};
+            }
+
             render();
         } catch (e) {
             console.log('YouTube 썸네일 목록을 불러오지 못했습니다:', e);
@@ -1178,6 +1190,29 @@
 
         if (tab === 'radio') {
             const item = radioThumbnailMap[String(ep.num)];
+
+            if (item && typeof item === 'object' && item.thumbnail) {
+                return item.thumbnail;
+            }
+
+            if (typeof item === 'string') {
+                return item;
+            }
+        }
+
+        if (tab === 'sermon') {
+            // 1순위: sermon episode id로 매칭
+            let item = sermonThumbnailMap[String(ep.id)];
+
+            // 2순위: 날짜로 매칭
+            if (!item && ep.date) {
+                item = sermonThumbnailMap[String(ep.date)];
+            }
+
+            // 3순위: title + date 조합키도 지원
+            if (!item && ep.title && ep.date) {
+                item = sermonThumbnailMap[`${ep.date}|${ep.title}`];
+            }
 
             if (item && typeof item === 'object' && item.thumbnail) {
                 return item.thumbnail;
@@ -1317,7 +1352,7 @@
             <div class="p-5 space-y-5">
                 <!-- HERO / LATEST -->
                 <div class="hero-card relative rounded-2xl overflow-hidden bg-white border border-slate-200 text-slate-800 p-5 cursor-pointer hover:border-blue-900/30 transition-all shadow-sm" onclick="openPlayer('${currentTab}','${latest.id}')">
-                    ${thumbMarkup(latest, currentTab, 'hero-thumb', 'ELIM')}
+                    ${thumbMarkup(latest, currentTab, 'hero-thumb', currentTab === 'sermon' ? '말씀' : 'ELIM')}
                     <div class="flex items-center justify-between mb-3">
                         <span class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-950 text-xs font-semibold">
                             <span class="w-2 h-2 rounded-full bg-blue-900 animate-pulse"></span>
