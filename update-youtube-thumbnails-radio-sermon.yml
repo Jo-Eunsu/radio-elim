@@ -1,0 +1,371 @@
+name: Update Radio + Sermon thumbnails
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 매일 오전 9시 20분(KST) 전후 자동 확인
+    - cron: "20 0 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "index.html"
+      - ".github/workflows/update-youtube-thumbnails.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youtube-thumbnail-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yt-dlp
+        run: python -m pip install --upgrade yt-dlp
+
+      - name: Build Radio + Sermon thumbnail map
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+          from datetime import datetime
+          from difflib import SequenceMatcher
+
+          RADIO_URL = "https://www.youtube.com/@radio_elim/videos"
+          SERMON_URL = "https://www.youtube.com/@kwangjuChurch/videos"
+          INDEX = Path("index.html")
+          OUT = Path("youtube_thumbnails.json")
+
+          def run_yt_flat(url):
+              result = subprocess.run(
+                  [
+                      "yt-dlp",
+                      "--flat-playlist",
+                      "--dump-single-json",
+                      "--ignore-errors",
+                      "--no-warnings",
+                      url,
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              if result.returncode != 0 or not result.stdout.strip():
+                  print(f"YouTube 목록 불러오기 실패: {url}")
+                  print(result.stderr[-3000:])
+                  return []
+              try:
+                  data = json.loads(result.stdout)
+                  return data.get("entries") or []
+              except Exception as e:
+                  print("YouTube JSON 해석 실패:", e)
+                  return []
+
+          def run_yt_detailed(url, limit=180):
+              result = subprocess.run(
+                  [
+                      "yt-dlp",
+                      "--skip-download",
+                      "--dump-json",
+                      "--ignore-errors",
+                      "--no-warnings",
+                      "--playlist-end", str(limit),
+                      url,
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              items = []
+              for line in result.stdout.splitlines():
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      items.append(json.loads(line))
+                  except Exception:
+                      pass
+              return items
+
+          def radio_episode_from_title(title):
+              title = (title or "").strip()
+              patterns = [
+                  r"^\s*(\d{1,3})(?:[._-](\d+))?\s*(?:회)?\s*[.\-:)]",
+                  r"^\s*(\d{1,3})(?:[._-](\d+))?\s*회\b",
+                  r"(?:라디오\s*엘림|RADIO\s*ELIM)\s*[#:_\- ]*\s*(\d{1,3})(?:[._-](\d+))?\s*회?",
+              ]
+              for pattern in patterns:
+                  m = re.search(pattern, title, flags=re.I)
+                  if m:
+                      main = str(int(m.group(1)))
+                      sub = m.group(2) if m.lastindex and m.lastindex >= 2 else None
+                      return f"{main}.{int(sub)}" if sub else main
+
+              if "엘림" in title:
+                  m = re.search(r"(?<!\d)(\d{1,3})(?:[._-](\d+))?(?!\d)", title)
+                  if m:
+                      main = str(int(m.group(1)))
+                      return f"{main}.{int(m.group(2))}" if m.group(2) else main
+              return None
+
+          def normalize_text(s):
+              s = (s or "").lower()
+              s = re.sub(r"\bpa\b", "", s, flags=re.I)
+              s = re.sub(r"[^0-9a-z가-힣]+", "", s)
+              return s
+
+          def parse_sermon_title(raw):
+              # 예: 31. 박경수Pa_고전13_그 중에 제일은 사랑이라
+              t = re.sub(r"^\s*\d+\s*[.)-]\s*", "", raw or "")
+              parts = [p.strip() for p in t.split("_") if p.strip()]
+
+              speaker = ""
+              scripture = ""
+              subject = ""
+
+              if parts:
+                  speaker = re.sub(r"(?i)pa$", "", parts[0]).strip()
+              if len(parts) >= 2:
+                  scripture = parts[1]
+              if len(parts) >= 3:
+                  subject = " ".join(parts[2:])
+              elif len(parts) == 2:
+                  subject = parts[1]
+
+              return speaker, scripture, subject
+
+          def extract_sermon_episodes(index_text):
+              m = re.search(
+                  r"const\s+sermonEpisodes\s*=\s*\[(.*?)\n\s*\];",
+                  index_text,
+                  flags=re.S,
+              )
+              if not m:
+                  return []
+
+              block = m.group(1)
+              episodes = []
+
+              pattern = re.compile(
+                  r'\{\s*id:\s*"([^"]+)"\s*,\s*num:\s*([^,]+)\s*,\s*title:\s*"([^"]*)"\s*,\s*date:\s*"([^"]+)"\s*,\s*src:\s*"([^"]+)"\s*\}'
+              )
+
+              for mm in pattern.finditer(block):
+                  ep_id = mm.group(1)
+                  num = mm.group(2).strip()
+                  title = mm.group(3)
+                  date = mm.group(4)
+                  speaker, scripture, subject = parse_sermon_title(title)
+
+                  episodes.append({
+                      "id": ep_id,
+                      "num": num,
+                      "title": title,
+                      "date": date,
+                      "speaker": speaker,
+                      "scripture": scripture,
+                      "subject": subject,
+                  })
+
+              return episodes
+
+          def date_distance_days(a, b):
+              try:
+                  da = datetime.strptime(a, "%Y-%m-%d")
+                  db = datetime.strptime(b, "%Y%m%d")
+                  return abs((da - db).days)
+              except Exception:
+                  return 999
+
+          # 기존 데이터 읽기
+          old_radio = {}
+          old_sermon = {}
+          if OUT.exists():
+              try:
+                  existing = json.loads(OUT.read_text(encoding="utf-8"))
+                  if isinstance(existing, dict) and ("radio" in existing or "sermon" in existing):
+                      old_radio = existing.get("radio") or {}
+                      old_sermon = existing.get("sermon") or {}
+                  elif isinstance(existing, dict):
+                      # 기존 라디오 전용 JSON
+                      old_radio = existing
+              except Exception:
+                  pass
+
+          # ---------------- 라디오 엘림 ----------------
+          radio_entries = run_yt_flat(RADIO_URL)
+          radio_found = {}
+
+          for entry in radio_entries:
+              if not entry:
+                  continue
+              video_id = entry.get("id")
+              title = entry.get("title") or ""
+              ep = radio_episode_from_title(title)
+
+              if video_id and ep:
+                  radio_found[ep] = {
+                      "videoId": video_id,
+                      "title": title,
+                      "thumbnail": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
+                      "youtube": f"https://www.youtube.com/watch?v={video_id}",
+                  }
+
+          radio_merged = dict(old_radio)
+          radio_merged.update(radio_found)
+
+          # ---------------- 주일말씀 ----------------
+          if not INDEX.exists():
+              print("index.html을 찾을 수 없습니다.")
+              sys.exit(1)
+
+          index_text = INDEX.read_text(encoding="utf-8")
+          sermons = extract_sermon_episodes(index_text)
+          youtube_sermons = run_yt_detailed(SERMON_URL, limit=180)
+
+          sermon_found = {}
+
+          for ep in sermons:
+              best = None
+              best_score = -1
+
+              ep_subject_norm = normalize_text(ep["subject"])
+              ep_title_norm = normalize_text(ep["title"])
+              speaker_norm = normalize_text(ep["speaker"])
+
+              for y in youtube_sermons:
+                  vid = y.get("id")
+                  yt_title = y.get("title") or ""
+                  upload_date = y.get("upload_date") or ""
+
+                  if not vid or not yt_title:
+                      continue
+
+                  yt_norm = normalize_text(yt_title)
+                  days = date_distance_days(ep["date"], upload_date)
+
+                  # 날짜가 너무 멀면 후보에서 제외
+                  if days > 14:
+                      continue
+
+                  score = 0.0
+
+                  # 날짜 점수
+                  if days == 0:
+                      score += 60
+                  elif days <= 1:
+                      score += 52
+                  elif days <= 3:
+                      score += 42
+                  elif days <= 7:
+                      score += 28
+                  else:
+                      score += 12
+
+                  # 목사님 성함
+                  if speaker_norm and speaker_norm in yt_norm:
+                      score += 45
+
+                  # 설교 제목 유사도
+                  if ep_subject_norm:
+                      subject_ratio = SequenceMatcher(None, ep_subject_norm, yt_norm).ratio()
+                      score += subject_ratio * 55
+
+                      # 핵심 제목이 그대로 포함되는 경우
+                      if len(ep_subject_norm) >= 4 and ep_subject_norm in yt_norm:
+                          score += 35
+
+                  # 전체 내부 제목과도 보조 비교
+                  whole_ratio = SequenceMatcher(None, ep_title_norm, yt_norm).ratio()
+                  score += whole_ratio * 15
+
+                  if score > best_score:
+                      best_score = score
+                      best = y
+
+              # 너무 낮은 점수는 오매칭 방지를 위해 자동 적용하지 않음
+              if best and best_score >= 58:
+                  vid = best["id"]
+                  upload_date = best.get("upload_date") or ""
+
+                  item = {
+                      "videoId": vid,
+                      "title": best.get("title") or "",
+                      "thumbnail": f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg",
+                      "youtube": f"https://www.youtube.com/watch?v={vid}",
+                      "matchedDate": upload_date,
+                      "score": round(best_score, 1),
+                  }
+
+                  # index가 읽는 3가지 키를 모두 저장
+                  sermon_found[ep["id"]] = item
+                  sermon_found[ep["date"]] = item
+                  sermon_found[f'{ep["date"]}|{ep["title"]}'] = item
+
+                  print(
+                      "SERMON MATCH:",
+                      ep["date"],
+                      ep["speaker"],
+                      ep["subject"],
+                      "=>",
+                      item["title"],
+                      "score=",
+                      round(best_score, 1),
+                  )
+              else:
+                  print(
+                      "SERMON NO MATCH:",
+                      ep["date"],
+                      ep["speaker"],
+                      ep["subject"],
+                      "best_score=",
+                      round(best_score, 1),
+                  )
+
+          sermon_merged = dict(old_sermon)
+          sermon_merged.update(sermon_found)
+
+          result = {
+              "radio": radio_merged,
+              "sermon": sermon_merged,
+          }
+
+          OUT.write_text(
+              json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          print("라디오 신규/갱신:", len(radio_found))
+          print("주일말씀 매칭 키:", len(sermon_found))
+          PY
+
+      - name: Commit thumbnail map
+        shell: bash
+        run: |
+          if git diff --quiet -- youtube_thumbnails.json; then
+            echo "변경 사항 없음"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add youtube_thumbnails.json
+          git commit -m "Update Radio and Sermon thumbnails"
+          git push
