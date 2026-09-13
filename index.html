@@ -1062,18 +1062,27 @@
         // Media Session API를 지원하는 환경에서는 더 자세한 메타데이터도 함께 전달한다.
         if ('mediaSession' in navigator && 'MediaMetadata' in window) {
             try {
-                navigator.mediaSession.metadata = new MediaMetadata({
+                const thumb = getEpisodeThumbnail(ep, currentEpisodeTab);
+
+                const metadata = {
                     title: episodeTitle,
                     artist: sectionName,
-                    album: '생명의말씀선교회 광주교회',
-                    artwork: [
+                    album: '생명의말씀선교회 광주교회'
+                };
+
+                // 라디오 엘림은 각 회차의 YouTube 썸네일을 잠금화면에도 사용
+                // 썸네일이 아직 준비되지 않았다면 artwork 자체를 넣지 않아
+                // iOS 네이티브 Now Playing artwork를 덮어쓰지 않게 한다.
+                if (thumb) {
+                    metadata.artwork = [
                         {
-                            src: new URL('nowplaying_logo.png', window.location.href).href,
-                            sizes: '1024x1024',
-                            type: 'image/png'
+                            src: thumb,
+                            type: 'image/jpeg'
                         }
-                    ]
-                });
+                    ];
+                }
+
+                navigator.mediaSession.metadata = new MediaMetadata(metadata);
             } catch (e) {
                 console.log('Media Session metadata 설정 불가:', e);
             }
