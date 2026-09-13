@@ -1,0 +1,248 @@
+name: Update Sermon thumbnails only
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 0 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "index.html"
+      - ".github/workflows/update-sermon-thumbnails.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  update-sermon:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yt-dlp
+        run: python -m pip install --upgrade yt-dlp
+
+      - name: Match sermon thumbnails
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+          from datetime import datetime
+          from difflib import SequenceMatcher
+
+          SERMON_URL = "https://www.youtube.com/@kwangjuChurch/videos"
+          INDEX = Path("index.html")
+          OUT = Path("sermon_thumbnails.json")
+
+          def yt_detailed(url, limit=220):
+              result = subprocess.run(
+                  [
+                      "yt-dlp",
+                      "--skip-download",
+                      "--dump-json",
+                      "--ignore-errors",
+                      "--no-warnings",
+                      "--playlist-end", str(limit),
+                      url,
+                  ],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+
+              items = []
+              for line in result.stdout.splitlines():
+                  try:
+                      items.append(json.loads(line))
+                  except Exception:
+                      pass
+              return items
+
+          def normalize_text(s):
+              s = (s or "").lower()
+              s = re.sub(r"(?i)\bpa\b", "", s)
+              s = re.sub(r"[^0-9a-z가-힣]+", "", s)
+              return s
+
+          def parse_sermon_title(raw):
+              t = re.sub(r"^\s*\d+\s*[.)-]\s*", "", raw or "")
+              parts = [p.strip() for p in t.split("_") if p.strip()]
+
+              speaker = re.sub(r"(?i)pa$", "", parts[0]).strip() if parts else ""
+              scripture = parts[1] if len(parts) >= 2 else ""
+              subject = " ".join(parts[2:]) if len(parts) >= 3 else (parts[1] if len(parts) == 2 else "")
+
+              return speaker, scripture, subject
+
+          def extract_sermon_episodes(index_text):
+              m = re.search(
+                  r"const\s+sermonEpisodes\s*=\s*\[(.*?)\n\s*\];",
+                  index_text,
+                  flags=re.S,
+              )
+
+              if not m:
+                  print("index.html에서 sermonEpisodes를 찾지 못했습니다.")
+                  return []
+
+              block = m.group(1)
+              episodes = []
+
+              pattern = re.compile(
+                  r'\{\s*id:\s*"([^"]+)"\s*,\s*num:\s*([^,]+)\s*,\s*title:\s*"([^"]*)"\s*,\s*date:\s*"([^"]+)"\s*,\s*src:\s*"([^"]+)"\s*\}'
+              )
+
+              for mm in pattern.finditer(block):
+                  speaker, scripture, subject = parse_sermon_title(mm.group(3))
+
+                  episodes.append({
+                      "id": mm.group(1),
+                      "num": mm.group(2).strip(),
+                      "title": mm.group(3),
+                      "date": mm.group(4),
+                      "speaker": speaker,
+                      "scripture": scripture,
+                      "subject": subject,
+                  })
+
+              return episodes
+
+          def date_distance_days(index_date, yt_date):
+              try:
+                  a = datetime.strptime(index_date, "%Y-%m-%d")
+                  b = datetime.strptime(yt_date, "%Y%m%d")
+                  return abs((a - b).days)
+              except Exception:
+                  return 999
+
+          if not INDEX.exists():
+              print("index.html이 없습니다.")
+              sys.exit(1)
+
+          sermons = extract_sermon_episodes(INDEX.read_text(encoding="utf-8"))
+          videos = yt_detailed(SERMON_URL)
+
+          existing = {}
+          if OUT.exists():
+              try:
+                  existing = json.loads(OUT.read_text(encoding="utf-8"))
+                  if not isinstance(existing, dict):
+                      existing = {}
+              except Exception:
+                  existing = {}
+
+          found = {}
+
+          for ep in sermons:
+              best = None
+              best_score = -1.0
+
+              speaker_norm = normalize_text(ep["speaker"])
+              subject_norm = normalize_text(ep["subject"])
+              full_norm = normalize_text(ep["title"])
+
+              for video in videos:
+                  video_id = video.get("id")
+                  yt_title = video.get("title") or ""
+                  upload_date = video.get("upload_date") or ""
+
+                  if not video_id or not yt_title:
+                      continue
+
+                  days = date_distance_days(ep["date"], upload_date)
+
+                  if days > 14:
+                      continue
+
+                  yt_norm = normalize_text(yt_title)
+                  score = 0.0
+
+                  if days == 0:
+                      score += 60
+                  elif days <= 1:
+                      score += 52
+                  elif days <= 3:
+                      score += 42
+                  elif days <= 7:
+                      score += 28
+                  else:
+                      score += 12
+
+                  if speaker_norm and speaker_norm in yt_norm:
+                      score += 45
+
+                  if subject_norm:
+                      score += SequenceMatcher(None, subject_norm, yt_norm).ratio() * 55
+                      if len(subject_norm) >= 4 and subject_norm in yt_norm:
+                          score += 35
+
+                  score += SequenceMatcher(None, full_norm, yt_norm).ratio() * 15
+
+                  if score > best_score:
+                      best_score = score
+                      best = video
+
+              if best and best_score >= 58:
+                  video_id = best["id"]
+
+                  item = {
+                      "videoId": video_id,
+                      "title": best.get("title") or "",
+                      "thumbnail": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+                      "youtube": f"https://www.youtube.com/watch?v={video_id}",
+                      "matchedDate": best.get("upload_date") or "",
+                      "score": round(best_score, 1),
+                  }
+
+                  found[ep["id"]] = item
+                  found[ep["date"]] = item
+                  found[f'{ep["date"]}|{ep["title"]}'] = item
+
+                  print(
+                      "MATCH:",
+                      ep["date"],
+                      ep["speaker"],
+                      ep["subject"],
+                      "=>",
+                      item["title"],
+                      "score=",
+                      round(best_score, 1),
+                  )
+
+          merged = dict(existing)
+          merged.update(found)
+
+          OUT.write_text(
+              json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          print("주일말씀 매칭 키:", len(found))
+          PY
+
+      - name: Commit sermon thumbnails
+        shell: bash
+        run: |
+          if git diff --quiet -- sermon_thumbnails.json; then
+            echo "변경 사항 없음"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add sermon_thumbnails.json
+          git commit -m "Update sermon thumbnails"
+          git push
