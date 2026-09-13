@@ -1157,30 +1157,45 @@
     let sermonThumbnailMap = {};
 
     async function loadYouTubeThumbnails() {
+        // 라디오 엘림: 기존 youtube_thumbnails.json 그대로 사용
         try {
-            const res = await fetch(`youtube_thumbnails.json?v=${Date.now()}`, {
+            const radioRes = await fetch(`youtube_thumbnails.json?v=${Date.now()}`, {
                 cache: 'no-store'
             });
 
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (radioRes.ok) {
+                const radioData = await radioRes.json();
 
-            const data = await res.json();
-
-            // 새 통합 JSON 형식 지원:
-            // { "radio": {...}, "sermon": {...} }
-            if (data && typeof data === 'object' && (data.radio || data.sermon)) {
-                radioThumbnailMap = data.radio && typeof data.radio === 'object' ? data.radio : {};
-                sermonThumbnailMap = data.sermon && typeof data.sermon === 'object' ? data.sermon : {};
-            } else {
-                // 기존 라디오 전용 JSON도 계속 지원
-                radioThumbnailMap = data && typeof data === 'object' ? data : {};
-                sermonThumbnailMap = {};
+                // 혹시 통합형 JSON이 남아 있어도 radio만 안전하게 읽음
+                if (radioData && typeof radioData === 'object' && radioData.radio) {
+                    radioThumbnailMap = radioData.radio;
+                } else {
+                    radioThumbnailMap = radioData && typeof radioData === 'object'
+                        ? radioData
+                        : {};
+                }
             }
-
-            render();
         } catch (e) {
-            console.log('YouTube 썸네일 목록을 불러오지 못했습니다:', e);
+            console.log('라디오 엘림 썸네일 목록을 불러오지 못했습니다:', e);
         }
+
+        // 주일말씀: 별도 sermon_thumbnails.json 사용
+        try {
+            const sermonRes = await fetch(`sermon_thumbnails.json?v=${Date.now()}`, {
+                cache: 'no-store'
+            });
+
+            if (sermonRes.ok) {
+                const sermonData = await sermonRes.json();
+                sermonThumbnailMap = sermonData && typeof sermonData === 'object'
+                    ? sermonData
+                    : {};
+            }
+        } catch (e) {
+            console.log('주일말씀 썸네일 목록을 불러오지 못했습니다:', e);
+        }
+
+        render();
     }
 
     function getEpisodeThumbnail(ep, tab) {
