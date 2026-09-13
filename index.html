@@ -34,91 +34,121 @@
             background: #eef2f7;
         }
 
-        /* 섹션별 움직이는 배경 */
+        /* 차분한 공통 배경 + 섹션별 포인트 */
         #app {
             isolation: isolate;
-            background-size: 145% 145%, 150% 150%, 180% 180%;
-            animation: elimBackground 12s ease-in-out infinite alternate;
-            transition: background .45s ease;
-        }
-
-        /* 라디오 엘림: 파란 배경 */
-        #app.theme-radio {
             background:
-                radial-gradient(circle at 15% 18%, rgba(96,165,250,.16), transparent 30%),
-                radial-gradient(circle at 88% 32%, rgba(37,99,235,.12), transparent 34%),
-                linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,246,255,.96) 48%, rgba(248,250,252,.98));
+                linear-gradient(145deg, rgba(255,255,255,.99), rgba(248,250,252,.98) 50%, rgba(255,255,255,.99));
+            transition: background .35s ease;
         }
 
-        /* 주일말씀: 연한 금색 배경 */
-        #app.theme-sermon {
-            background:
-                radial-gradient(circle at 15% 18%, rgba(253,224,71,.18), transparent 30%),
-                radial-gradient(circle at 88% 32%, rgba(245,158,11,.11), transparent 34%),
-                linear-gradient(145deg, rgba(255,255,255,.98), rgba(255,251,235,.96) 48%, rgba(255,253,244,.98));
+        /* 상단에 아주 은은한 테마 라인 */
+        #app::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 72%;
+            height: 3px;
+            transform: translateX(-50%);
+            border-radius: 0 0 999px 999px;
+            opacity: .75;
+            pointer-events: none;
+            z-index: 10;
         }
 
-        #app::before,
+        /* 화면 하단에는 거의 보이지 않는 부드러운 빛만 */
         #app::after {
             content: "";
             position: absolute;
-            border-radius: 999px;
-            filter: blur(8px);
-            pointer-events: none;
-            z-index: -1;
-            opacity: .52;
-            transition: background .45s ease;
-        }
-
-        #app::before {
-            width: 220px;
-            height: 220px;
-            top: 8%;
-            left: -95px;
-            animation: floatOrbA 8s ease-in-out infinite;
-        }
-
-        #app::after {
             width: 260px;
             height: 260px;
-            right: -130px;
-            bottom: 16%;
-            animation: floatOrbB 10s ease-in-out infinite;
+            left: 50%;
+            bottom: 10%;
+            transform: translateX(-50%);
+            border-radius: 999px;
+            filter: blur(26px);
+            opacity: .14;
+            pointer-events: none;
+            z-index: -1;
+            animation: softGlow 8s ease-in-out infinite;
         }
 
-        /* 엘림 배경 파동: 파란색 */
+        /* 라디오 엘림: 파란 포인트 */
         #app.theme-radio::before {
-            background: radial-gradient(circle, rgba(125,211,252,.24), rgba(125,211,252,0) 70%);
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(59,130,246,.28),
+                rgba(30,64,175,.52),
+                rgba(59,130,246,.28),
+                transparent
+            );
         }
 
         #app.theme-radio::after {
-            background: radial-gradient(circle, rgba(59,130,246,.20), rgba(59,130,246,0) 70%);
+            background: radial-gradient(
+                circle,
+                rgba(96,165,250,.30),
+                rgba(96,165,250,0) 68%
+            );
         }
 
-        /* 주일말씀 배경 파동: 연한 금색 */
+        /* 즐겨찾기: 일반 흰 배경 */
+        #app.theme-neutral {
+            background: #ffffff;
+        }
+
+        #app.theme-neutral::before {
+            background: transparent;
+        }
+
+        #app.theme-neutral::after {
+            background: transparent;
+            animation: none;
+        }
+
+        /* 주일말씀: 연한 금색 포인트 */
+        #app.theme-sermon {
+            background:
+                linear-gradient(145deg, rgba(255,255,255,.99), rgba(255,253,247,.98) 50%, rgba(255,255,255,.99));
+        }
+
         #app.theme-sermon::before {
-            background: radial-gradient(circle, rgba(253,224,71,.24), rgba(253,224,71,0) 70%);
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(245,194,66,.26),
+                rgba(217,170,45,.48),
+                rgba(245,194,66,.26),
+                transparent
+            );
         }
 
         #app.theme-sermon::after {
-            background: radial-gradient(circle, rgba(251,191,36,.19), rgba(251,191,36,0) 70%);
+            background: radial-gradient(
+                circle,
+                rgba(250,204,21,.24),
+                rgba(250,204,21,0) 68%
+            );
         }
 
-        @keyframes elimBackground {
-            0%   { background-position: 0% 20%, 100% 0%, 0% 50%; }
-            50%  { background-position: 30% 45%, 70% 30%, 100% 50%; }
-            100% { background-position: 15% 60%, 85% 55%, 35% 50%; }
+        @keyframes softGlow {
+            0%, 100% {
+                transform: translateX(-50%) scale(.96);
+                opacity: .10;
+            }
+            50% {
+                transform: translateX(-50%) scale(1.05);
+                opacity: .18;
+            }
         }
 
-        @keyframes floatOrbA {
-            0%,100% { transform: translate3d(0,0,0) scale(1); }
-            50% { transform: translate3d(36px,52px,0) scale(1.10); }
-        }
 
-        @keyframes floatOrbB {
-            0%,100% { transform: translate3d(0,0,0) scale(1); }
-            50% { transform: translate3d(-34px,-46px,0) scale(.94); }
-        }
+
+
+
+
 
         header {
             background: rgba(255,255,255,.78) !important;
@@ -142,15 +172,38 @@
         }
 
         .hero-card {
-            background:
-                linear-gradient(135deg, rgba(255,255,255,.94), rgba(239,246,255,.88)) !important;
             border: 1px solid rgba(148,163,184,.24) !important;
-            box-shadow: 0 14px 34px rgba(30,58,138,.08);
-            transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+            transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .25s ease;
+        }
+
+        .theme-radio .hero-card {
+            background:
+                linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,246,255,.90)) !important;
+        }
+
+        .theme-sermon .hero-card {
+            background:
+                linear-gradient(135deg, rgba(255,255,255,.97), rgba(255,248,220,.92)) !important;
+        }
+
+        .theme-neutral .hero-card {
+            background: #ffffff !important;
+            border-color: rgba(226,232,240,.9) !important;
+            box-shadow: 0 8px 24px rgba(15,23,42,.04);
         }
 
         .hero-card:active {
             transform: scale(.985);
+        }
+
+        .theme-radio .hero-card {
+            border-color: rgba(96,165,250,.28) !important;
+            box-shadow: 0 14px 34px rgba(59,130,246,.07);
+        }
+
+        .theme-sermon .hero-card {
+            border-color: rgba(217,170,45,.26) !important;
+            box-shadow: 0 14px 34px rgba(217,170,45,.07);
         }
 
         .hero-card::after {
@@ -161,8 +214,19 @@
             right: -46px;
             top: -58px;
             border-radius: 999px;
-            background: radial-gradient(circle, rgba(59,130,246,.13), rgba(59,130,246,0) 68%);
             pointer-events: none;
+        }
+
+        .theme-radio .hero-card::after {
+            background: radial-gradient(circle, rgba(59,130,246,.14), rgba(59,130,246,0) 68%);
+        }
+
+        .theme-sermon .hero-card::after {
+            background: radial-gradient(circle, rgba(217,170,45,.16), rgba(217,170,45,0) 68%);
+        }
+
+        .theme-neutral .hero-card::after {
+            background: transparent;
         }
 
         .episode-card {
@@ -177,6 +241,24 @@
         .episode-card:active {
             transform: scale(.985);
             background: rgba(255,255,255,.92) !important;
+        }
+
+        .theme-radio .episode-card:hover {
+            border-color: rgba(96,165,250,.36) !important;
+        }
+
+        .theme-sermon .episode-card:hover {
+            border-color: rgba(217,170,45,.34) !important;
+        }
+
+        .theme-neutral .episode-card {
+            background: #ffffff !important;
+            border-color: rgba(226,232,240,.9) !important;
+            box-shadow: none;
+        }
+
+        .theme-neutral .episode-card:hover {
+            border-color: rgba(203,213,225,.95) !important;
         }
 
         #search-input {
@@ -218,12 +300,12 @@
         /* 주일말씀: 따뜻한 금빛/코랄 파동 */
         .player-art-card.sermon-theme {
             background:
-                radial-gradient(circle at 50% 38%, rgba(253,224,71,.36), transparent 34%),
-                linear-gradient(150deg, #fff7d6 0%, #f5d98a 52%, #e9c96d 100%) !important;
+                radial-gradient(circle at 50% 38%, rgba(253,224,71,.20), transparent 36%),
+                linear-gradient(150deg, #fffdf5 0%, #f8edc7 54%, #ead58a 100%) !important;
             color: #5b4212 !important;
             box-shadow:
-                0 24px 52px rgba(120,90,20,.16),
-                0 0 30px rgba(251,191,36,.18);
+                0 20px 42px rgba(120,90,20,.12),
+                0 0 22px rgba(217,170,45,.12);
         }
 
         .player-art-card.sermon-theme .text-white,
@@ -252,14 +334,14 @@
 
         .player-art-card.radio-theme::before,
         .player-art-card.radio-theme::after {
-            border: 2px solid rgba(125,211,252,.58);
-            box-shadow: 0 0 18px rgba(56,189,248,.18);
+            border: 1.5px solid rgba(125,211,252,.44);
+            box-shadow: 0 0 14px rgba(56,189,248,.12);
         }
 
         .player-art-card.sermon-theme::before,
         .player-art-card.sermon-theme::after {
-            border: 2px solid rgba(217,170,45,.48);
-            box-shadow: 0 0 18px rgba(251,191,36,.18);
+            border: 1.5px solid rgba(217,170,45,.34);
+            box-shadow: 0 0 14px rgba(217,170,45,.10);
         }
 
         .player-art-card::before {
@@ -823,9 +905,15 @@
     function render() {
         const relevantThemeTab = currentRoute === 'player' ? currentEpisodeTab : currentTab;
         const appEl = document.getElementById('app');
+
         if (appEl) {
-            appEl.classList.toggle('theme-radio', relevantThemeTab !== 'sermon');
-            appEl.classList.toggle('theme-sermon', relevantThemeTab === 'sermon');
+            const isFavorites = currentRoute !== 'player' && currentTab === 'favorites';
+            const isSermonTheme = !isFavorites && relevantThemeTab === 'sermon';
+            const isRadioTheme = !isFavorites && !isSermonTheme;
+
+            appEl.classList.toggle('theme-radio', isRadioTheme);
+            appEl.classList.toggle('theme-sermon', isSermonTheme);
+            appEl.classList.toggle('theme-neutral', isFavorites);
         }
 
         updateNavStyles();
