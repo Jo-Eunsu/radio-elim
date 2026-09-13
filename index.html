@@ -331,6 +331,11 @@
             z-index: 0;
         }
 
+        .player-art-card.radio-theme .player-thumb {
+            filter: none;
+            opacity: 1;
+        }
+
         .player-thumb-overlay {
             position: absolute;
             inset: 0;
@@ -341,6 +346,16 @@
                 rgba(15,23,42,.42)
             );
             pointer-events: none;
+        }
+
+        /* 라디오 엘림 재생 화면: 썸네일을 가리지 않도록 오버레이 제거 */
+        .player-art-card.radio-theme .player-thumb-overlay {
+            display: none;
+        }
+
+        /* 라디오 엘림에서는 중앙 RADIO / ELIM 장식도 숨김 */
+        .player-art-card.radio-theme .player-thumb-content {
+            display: none;
         }
 
         .player-thumb-content {
