@@ -366,6 +366,46 @@
             }
         }
 
+        .thumb-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            color: #64748b;
+            background: linear-gradient(135deg, rgba(248,250,252,.98), rgba(241,245,249,.98));
+        }
+
+        .theme-radio .thumb-placeholder {
+            color: #1e3a8a;
+            background: linear-gradient(135deg, rgba(239,246,255,.98), rgba(219,234,254,.92));
+        }
+
+        .theme-sermon .thumb-placeholder {
+            color: #8a6715;
+            background: linear-gradient(135deg, rgba(255,253,245,.98), rgba(254,249,195,.88));
+        }
+
+        .hero-thumb.thumb-placeholder {
+            font-size: 24px;
+        }
+
+        .episode-thumb.thumb-placeholder,
+        .favorite-thumb.thumb-placeholder {
+            font-size: 13px;
+        }
+
+        .player-thumb.thumb-placeholder {
+            font-size: 28px;
+            color: rgba(255,255,255,.92);
+            background: linear-gradient(145deg, rgba(23,37,84,.96), rgba(37,99,235,.90));
+        }
+
+        .player-art-card.sermon-theme .player-thumb.thumb-placeholder {
+            color: #6b5012;
+            background: linear-gradient(145deg, #fffdf5, #f1dfa3);
+        }
+
         .theme-radio .episode-card.now-playing {
             background: rgba(239,246,255,.94) !important;
             border-color: rgba(59,130,246,.42) !important;
@@ -1049,7 +1089,10 @@
         }
     };
 
-    window.addEventListener('DOMContentLoaded', render);
+    window.addEventListener('DOMContentLoaded', () => {
+        render();
+        loadYouTubeThumbnails();
+    });
 
     function pad2(n) { return String(Math.floor(n)).padStart(2, '0'); }
     function formatTime(totalSeconds) {
@@ -1085,41 +1128,70 @@
         updatePlayerProgress();
     }
 
-    // ---------------- YouTube 썸네일 ----------------
-    // 아래 회차별 YouTube 영상 ID만 채우면 자동으로 썸네일이 적용됩니다.
-    // 예: 유튜브 주소가 https://www.youtube.com/watch?v=ABC123xyz 이면
-    //     222: 'ABC123xyz'
-    const radioYouTubeIds = {
-        // 222: '',
-        // 221: '',
-        // 220: '',
-    };
+    // ---------------- YouTube 썸네일 자동 연결 ----------------
+    let radioThumbnailMap = {};
 
-    function youtubeThumbnailFromId(videoId) {
-        if (!videoId) return '';
-        return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    async function loadYouTubeThumbnails() {
+        try {
+            const res = await fetch(`youtube_thumbnails.json?v=${Date.now()}`, {
+                cache: 'no-store'
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const data = await res.json();
+            radioThumbnailMap = data && typeof data === 'object' ? data : {};
+            render();
+        } catch (e) {
+            console.log('YouTube 썸네일 목록을 불러오지 못했습니다:', e);
+        }
     }
 
     function getEpisodeThumbnail(ep, tab) {
-        // 회차 데이터에 thumbnail 주소를 직접 넣어둔 경우 우선 사용
-        if (ep && ep.thumbnail) return ep.thumbnail;
+        if (!ep) return '';
 
-        // 라디오 엘림은 회차 번호에 연결한 유튜브 영상 ID 사용
+        if (ep.thumbnail) return ep.thumbnail;
+
         if (tab === 'radio') {
-            const videoId = radioYouTubeIds[ep.num];
-            if (videoId) return youtubeThumbnailFromId(videoId);
+            const item = radioThumbnailMap[String(ep.num)];
+
+            if (item && typeof item === 'object' && item.thumbnail) {
+                return item.thumbnail;
+            }
+
+            if (typeof item === 'string') {
+                return item;
+            }
         }
 
-        // 썸네일이 아직 없는 회차는 기본 ELIM 로고
-        return 'elim_logo.png';
+        return '';
     }
 
-    function thumbFallback(img) {
-        img.onerror = null;
-        img.src = 'elim_logo.png';
-        img.style.objectFit = 'contain';
-        img.style.padding = '8px';
-        img.style.background = '#ffffff';
+    function thumbFallback(img, label) {
+        const fallback = document.createElement('div');
+        fallback.className = `${img.className} thumb-placeholder`;
+        fallback.textContent = label || 'ELIM';
+        img.replaceWith(fallback);
+    }
+
+    function thumbMarkup(ep, tab, className, fallbackLabel) {
+        const src = getEpisodeThumbnail(ep, tab);
+        const label = fallbackLabel || (String(ep.num).includes('.') ? '번외' : String(ep.num));
+
+        if (!src) {
+            return `<div class="${className} thumb-placeholder">${label}</div>`;
+        }
+
+        return `
+            <img
+                src="${src}"
+                alt="${ep.title}"
+                class="${className}"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                onerror="thumbFallback(this, '${label}')"
+            />
+        `;
     }
 
     function listFor(tab) { return tab === 'radio' ? radioEpisodes : sermonEpisodes; }
@@ -1221,12 +1293,7 @@
             <div class="p-5 space-y-5">
                 <!-- HERO / LATEST -->
                 <div class="hero-card relative rounded-2xl overflow-hidden bg-white border border-slate-200 text-slate-800 p-5 cursor-pointer hover:border-blue-900/30 transition-all shadow-sm" onclick="openPlayer('${currentTab}','${latest.id}')">
-                    <img
-                        src="${getEpisodeThumbnail(latest, currentTab)}"
-                        alt="${latest.title}"
-                        class="hero-thumb"
-                        onerror="thumbFallback(this)"
-                    />
+                    ${thumbMarkup(latest, currentTab, 'hero-thumb', 'ELIM')}
                     <div class="flex items-center justify-between mb-3">
                         <span class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-950 text-xs font-semibold">
                             <span class="w-2 h-2 rounded-full bg-blue-900 animate-pulse"></span>
@@ -1270,12 +1337,7 @@
                             return `
                                 <div onclick="openPlayer('${currentTab}','${ep.id}')" class="episode-card ${isCurrentPlaying ? 'now-playing' : ''} flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-900/30 cursor-pointer transition-all group">
                                     <div class="flex items-center space-x-3 min-w-0">
-                                        <img
-                                            src="${getEpisodeThumbnail(ep, currentTab)}"
-                                            alt="${ep.title}"
-                                            class="episode-thumb"
-                                            onerror="thumbFallback(this)"
-                                        />
+                                        ${thumbMarkup(ep, currentTab, 'episode-thumb', String(ep.num).includes('.') ? '번외' : String(ep.num))}
                                         <div class="min-w-0">
                                             <div class="flex items-center min-w-0">
                                                 <h4 class="font-semibold text-sm text-slate-800 truncate">${ep.title}</h4>
@@ -1343,12 +1405,7 @@
                 <!-- 라디오 비주얼 카드 -->
                 <div class="w-full flex justify-center my-1">
                     <div class="player-art-card ${playerTheme} bg-blue-950 rounded-3xl shadow-2xl text-white relative overflow-hidden flex flex-col items-center justify-center border border-blue-900">
-                        <img
-                            src="${getEpisodeThumbnail(ep, currentEpisodeTab)}"
-                            alt="${ep.title}"
-                            class="player-thumb"
-                            onerror="thumbFallback(this)"
-                        />
+                        ${thumbMarkup(ep, currentEpisodeTab, 'player-thumb', currentEpisodeTab === 'sermon' ? '말씀' : 'ELIM')}
                         <div class="player-thumb-overlay"></div>
                         <div class="player-thumb-content flex flex-col items-center justify-center p-6 w-full h-full">
                             <div class="w-12 h-12 rounded-full border-2 border-white/80 flex items-center justify-center mb-4 ${isPlaying ? 'animate-pulse' : ''}">
@@ -1424,12 +1481,7 @@
                         ${favEps.map(ep => `
                             <div onclick="openPlayer('${ep.tab}','${ep.id}')" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-900/30 cursor-pointer shadow-sm">
                                 <div class="flex items-center space-x-3 min-w-0">
-                                    <img
-                                        src="${getEpisodeThumbnail(ep, ep.tab)}"
-                                        alt="${ep.title}"
-                                        class="favorite-thumb"
-                                        onerror="thumbFallback(this)"
-                                    />
+                                    ${thumbMarkup(ep, ep.tab, 'favorite-thumb', String(ep.num).includes('.') ? '번외' : String(ep.num))}
                                     <div class="min-w-0">
                                         <span class="text-[10px] text-blue-900 font-semibold px-1.5 py-0.5 rounded bg-blue-50">${tabLabel(ep.tab)}</span>
                                         <h4 class="font-semibold text-sm text-slate-800 truncate mt-0.5">${ep.title}</h4>
