@@ -34,15 +34,28 @@
             background: #eef2f7;
         }
 
-        /* 앱 전체에 아주 느리게 움직이는 배경 */
+        /* 섹션별 움직이는 배경 */
         #app {
             isolation: isolate;
-            background:
-                radial-gradient(circle at 15% 18%, rgba(251,191,36,.12), transparent 30%),
-                radial-gradient(circle at 88% 32%, rgba(245,158,11,.09), transparent 34%),
-                linear-gradient(145deg, rgba(255,255,255,.97), rgba(244,248,255,.94) 48%, rgba(255,255,255,.97));
             background-size: 145% 145%, 150% 150%, 180% 180%;
             animation: elimBackground 12s ease-in-out infinite alternate;
+            transition: background .45s ease;
+        }
+
+        /* 라디오 엘림: 파란 배경 */
+        #app.theme-radio {
+            background:
+                radial-gradient(circle at 15% 18%, rgba(96,165,250,.16), transparent 30%),
+                radial-gradient(circle at 88% 32%, rgba(37,99,235,.12), transparent 34%),
+                linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,246,255,.96) 48%, rgba(248,250,252,.98));
+        }
+
+        /* 주일말씀: 연한 금색 배경 */
+        #app.theme-sermon {
+            background:
+                radial-gradient(circle at 15% 18%, rgba(253,224,71,.18), transparent 30%),
+                radial-gradient(circle at 88% 32%, rgba(245,158,11,.11), transparent 34%),
+                linear-gradient(145deg, rgba(255,255,255,.98), rgba(255,251,235,.96) 48%, rgba(255,253,244,.98));
         }
 
         #app::before,
@@ -53,7 +66,8 @@
             filter: blur(8px);
             pointer-events: none;
             z-index: -1;
-            opacity: .48;
+            opacity: .52;
+            transition: background .45s ease;
         }
 
         #app::before {
@@ -61,7 +75,6 @@
             height: 220px;
             top: 8%;
             left: -95px;
-            background: radial-gradient(circle, rgba(253,224,71,.18), rgba(253,224,71,0) 70%);
             animation: floatOrbA 8s ease-in-out infinite;
         }
 
@@ -70,8 +83,25 @@
             height: 260px;
             right: -130px;
             bottom: 16%;
-            background: radial-gradient(circle, rgba(251,191,36,.14), rgba(251,191,36,0) 70%);
             animation: floatOrbB 10s ease-in-out infinite;
+        }
+
+        /* 엘림 배경 파동: 파란색 */
+        #app.theme-radio::before {
+            background: radial-gradient(circle, rgba(125,211,252,.24), rgba(125,211,252,0) 70%);
+        }
+
+        #app.theme-radio::after {
+            background: radial-gradient(circle, rgba(59,130,246,.20), rgba(59,130,246,0) 70%);
+        }
+
+        /* 주일말씀 배경 파동: 연한 금색 */
+        #app.theme-sermon::before {
+            background: radial-gradient(circle, rgba(253,224,71,.24), rgba(253,224,71,0) 70%);
+        }
+
+        #app.theme-sermon::after {
+            background: radial-gradient(circle, rgba(251,191,36,.19), rgba(251,191,36,0) 70%);
         }
 
         @keyframes elimBackground {
@@ -178,21 +208,35 @@
         /* 라디오 엘림: 푸른 파동 */
         .player-art-card.radio-theme {
             background:
-                radial-gradient(circle at 50% 38%, rgba(56,189,248,.28), transparent 34%),
-                linear-gradient(150deg, #172554 0%, #1d4ed8 52%, #0f172a 100%) !important;
+                radial-gradient(circle at 50% 38%, rgba(125,211,252,.30), transparent 34%),
+                linear-gradient(150deg, #172554 0%, #2563eb 52%, #0f172a 100%) !important;
             box-shadow:
                 0 24px 52px rgba(15,23,42,.22),
-                0 0 30px rgba(56,189,248,.12);
+                0 0 30px rgba(59,130,246,.15);
         }
 
         /* 주일말씀: 따뜻한 금빛/코랄 파동 */
         .player-art-card.sermon-theme {
             background:
-                radial-gradient(circle at 50% 38%, rgba(251,191,36,.28), transparent 34%),
-                linear-gradient(150deg, #451a03 0%, #9a3412 52%, #431407 100%) !important;
+                radial-gradient(circle at 50% 38%, rgba(253,224,71,.36), transparent 34%),
+                linear-gradient(150deg, #fff7d6 0%, #f5d98a 52%, #e9c96d 100%) !important;
+            color: #5b4212 !important;
             box-shadow:
-                0 24px 52px rgba(67,20,7,.24),
-                0 0 30px rgba(251,191,36,.13);
+                0 24px 52px rgba(120,90,20,.16),
+                0 0 30px rgba(251,191,36,.18);
+        }
+
+        .player-art-card.sermon-theme .text-white,
+        .player-art-card.sermon-theme .text-white\/75 {
+            color: #5b4212 !important;
+        }
+
+        .player-art-card.sermon-theme .border-white\/80 {
+            border-color: rgba(91,66,18,.72) !important;
+        }
+
+        .player-art-card.sermon-theme .bg-white {
+            background-color: #5b4212 !important;
         }
 
         .player-art-card::before,
@@ -214,8 +258,8 @@
 
         .player-art-card.sermon-theme::before,
         .player-art-card.sermon-theme::after {
-            border: 2px solid rgba(253,224,71,.56);
-            box-shadow: 0 0 18px rgba(251,191,36,.16);
+            border: 2px solid rgba(217,170,45,.48);
+            box-shadow: 0 0 18px rgba(251,191,36,.18);
         }
 
         .player-art-card::before {
@@ -295,7 +339,7 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-full flex flex-col antialiased selection:bg-blue-900 selection:text-white">
 
-    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-white shadow-2xl relative overflow-hidden border-x border-slate-200">
+    <div id="app" class="theme-radio flex-1 flex flex-col max-w-md mx-auto w-full bg-white shadow-2xl relative overflow-hidden border-x border-slate-200">
 
         <!-- HEADER (박스 제거 및 ELIM 로고 + 텍스트 복구) -->
         <header class="px-5 py-3.5 flex items-center justify-between border-b border-slate-100 bg-white/90 backdrop-blur-md sticky top-0 z-30">
@@ -777,6 +821,13 @@
 
     // ---------------- Render ----------------
     function render() {
+        const relevantThemeTab = currentRoute === 'player' ? currentEpisodeTab : currentTab;
+        const appEl = document.getElementById('app');
+        if (appEl) {
+            appEl.classList.toggle('theme-radio', relevantThemeTab !== 'sermon');
+            appEl.classList.toggle('theme-sermon', relevantThemeTab === 'sermon');
+        }
+
         updateNavStyles();
         document.getElementById('main-content').innerHTML =
             currentRoute === 'home' ? renderHomeView() :
