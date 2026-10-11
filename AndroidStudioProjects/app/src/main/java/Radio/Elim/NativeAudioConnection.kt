@@ -2,6 +2,7 @@ package Radio.Elim
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
@@ -18,6 +19,7 @@ import org.json.JSONObject
 @androidx.annotation.OptIn(UnstableApi::class)
 class NativeAudioConnection(
     private val view: WebView,
+    private val onPageReady: (String) -> Unit,
     private val onFailure: (String) -> Unit
 ) {
     companion object {
@@ -30,6 +32,7 @@ class NativeAudioConnection(
     private val handler = Handler(Looper.getMainLooper())
     private var controller: MediaController? = null
     private var ready = false
+    private var pageId: String? = null
     private var foreground = true
     private var released = false
     private val pending = ArrayDeque<JSONObject>()
@@ -57,9 +60,19 @@ class NativeAudioConnection(
                     val raw = message.data.orEmpty()
                     require(raw.length <= 1_000_000)
                     val data = JSONObject(raw)
-                    if (data.optString("type") in listOf("ready", "sync")) {
+                    val activePage = pageId ?: return@addWebMessageListener
+                    if (data.optString("pageId") != activePage ||
+                        Uri.parse(sourceView.url).getQueryParameter("_app_reload") != activePage) {
+                        return@addWebMessageListener
+                    }
+                    if (data.optString("type") == "ready") {
                         ready = true
+                        onPageReady(activePage)
                         publish()
+                    } else if (data.optString("type") == "sync") {
+                        if (ready) publish()
+                    } else if (!ready) {
+                        return@addWebMessageListener
                     } else if (controller == null) {
                         require(pending.size < 20)
                         pending.addLast(data)
@@ -85,7 +98,12 @@ class NativeAudioConnection(
         handler.post(ticker)
     }
 
-    fun markPageLoading() { ready = false }
+    fun beginPage(id: String) {
+        pageId = id
+        ready = false
+        pending.clear()
+        bridgeError = null
+    }
 
     fun stopPlayback() {
         pending.clear()
@@ -156,6 +174,7 @@ class NativeAudioConnection(
         val player = controller ?: return
         val item = player.currentMediaItem
         val state = JSONObject()
+            .put("pageId", pageId)
             .put("item", item?.let(PlaybackItems::toJson) ?: JSONObject.NULL)
             .put("position", player.currentPosition.coerceAtLeast(0) / 1000.0)
             .put("duration", player.duration.coerceAtLeast(0) / 1000.0)
@@ -171,6 +190,7 @@ class NativeAudioConnection(
     fun release() {
         if (released) return
         released = true
+        pageId = null
         handler.removeCallbacksAndMessages(null)
         controller?.removeListener(listener)
         controller = null

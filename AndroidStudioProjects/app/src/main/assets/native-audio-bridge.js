@@ -4,8 +4,11 @@
     if (window !== window.top || location.origin !== 'https://elim-radio.github.io' ||
         !(location.pathname === '/radio-elim' || location.pathname.startsWith('/radio-elim/')) ||
         !window.ElimNative || window.__elimNativeInstalled) return;
+    const pageId = new URLSearchParams(location.search).get('_app_reload');
+    if (!pageId) return;
     window.__elimNativeInstalled = true;
-    const send = (type, args = {}) => window.ElimNative.postMessage(JSON.stringify({type, ...args}));
+    window.__elimPageId = pageId;
+    const send = (type, args = {}) => window.ElimNative.postMessage(JSON.stringify({type, ...args, pageId}));
     let src = '', position = 0, duration = 0, speed = 1, paused = true, ended = false;
     let error = null, pendingId = null, currentId = null, snapshot = null, lastError = null;
     let ready = false, savedAt = 0, closing = false;
@@ -63,6 +66,7 @@
     window.audioEl = facade;
 
     function apply(state) {
+        if (state.pageId !== pageId) return;
         if (!ready) { snapshot = state; return; }
         if (closing && state.item) return;
         if (!state.item) closing = false;
@@ -104,7 +108,19 @@
         lastError = state.error;
     }
     window.__elimNativeApply = apply;
-    window.addEventListener('DOMContentLoaded', () => {
+    let readySent = false, readinessObserver = null, initializationTimer = null;
+    function pageIsReady() {
+        const main = document.getElementById('main-content');
+        return ready && document.readyState !== 'loading' && !!main && main.children.length > 0;
+    }
+    window.__elimIsPageReady = pageIsReady;
+    function notifyPageReady() {
+        if (readySent || !pageIsReady()) return;
+        readySent = true;
+        readinessObserver?.disconnect();
+        send('ready');
+    }
+    function initialize() {
             if (typeof listFor !== 'function' || typeof syncPlayingUI !== 'function') return;
             updateNowPlayingInfo = ep => { if (ep) document.title = ep.title; };
             updatePositionState = () => {};
@@ -114,10 +130,22 @@
             }
             ready = true;
             window.__elimNativeReady = true;
+            // Rendering may finish after DOMContentLoaded. Wait for actual content,
+            // not for remote thumbnails/fonts or the window load event.
+            readinessObserver = new MutationObserver(notifyPageReady);
+            readinessObserver.observe(document.documentElement, {childList: true, subtree: true});
             if (snapshot) { const initial = snapshot; snapshot = null; apply(initial); }
-            send('ready');
+            notifyPageReady();
+    }
+    window.addEventListener('DOMContentLoaded', () => {
+        // The injected bridge's listener runs before the website's render listener.
+        initializationTimer = setTimeout(initialize, 0);
+    }, {once: true});
+    window.addEventListener('pagehide', () => {
+        clearTimeout(initializationTimer);
+        readinessObserver?.disconnect();
     });
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && ready) send('sync');
+        if (!document.hidden && readySent) send('sync');
     });
 })();

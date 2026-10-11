@@ -8,7 +8,7 @@ android {
     compileSdk {
         version = release(37)
     }
-₩
+
     defaultConfig {
         applicationId = "radio.elim"
         minSdk = 26

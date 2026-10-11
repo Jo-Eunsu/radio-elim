@@ -3,7 +3,6 @@ package Radio.Elim
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
@@ -45,6 +44,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import org.json.JSONObject
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -56,13 +57,11 @@ class MainActivity : ComponentActivity() {
     private var playbackConnection: NativeAudioConnection? = null
     private var loading by mutableStateOf(true)
     private var pageError by mutableStateOf<String?>(null)
-    private var mainFrameFailed = false
+    private val pageLoad = PageLoadState()
     private var backgroundSince = 0L
     private val handler = Handler(Looper.getMainLooper())
-    private val loadTimeout = Runnable {
-        appWebView?.stopLoading()
-        failPage("연결이 지연되고 있습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
-    }
+    private var loadTimeout: Runnable? = null
+    private var readinessTimeout: Runnable? = null
 
     private fun isAppPage(uri: Uri): Boolean = PlaybackRules.isDocument(uri.toString())
 
@@ -71,30 +70,116 @@ class MainActivity : ComponentActivity() {
         finishAndRemoveTask()
     }
 
-    private fun failPage(message: String) {
-        handler.removeCallbacks(loadTimeout)
-        mainFrameFailed = true
-        loading = false
-        pageError = message
+    private fun cancelLoadTimeout() {
+        loadTimeout?.let(handler::removeCallbacks)
+        readinessTimeout?.let(handler::removeCallbacks)
+        loadTimeout = null
+        readinessTimeout = null
     }
 
-    private fun loadLatestPage() {
+    private fun updatePageUi() {
+        loading = pageLoad.phase == PageLoadState.Phase.LOADING
+        pageError = pageLoad.message
+    }
+
+    private fun isActivePage(view: WebView, id: String): Boolean =
+        appWebView === view && pageLoad.isCurrent(id)
+
+    private fun pageIdFor(view: WebView, url: String): String? {
+        val uri = Uri.parse(url)
+        if (!isAppPage(uri)) return null
+        val id = uri.getQueryParameter("_app_reload") ?: return null
+        return id.takeIf { isActivePage(view, it) }
+    }
+
+    private fun failPage(id: String, message: String) {
+        if (!pageLoad.fail(id, message)) return
+        cancelLoadTimeout()
+        updatePageUi()
+    }
+
+    private fun checkPageReady(view: WebView, id: String, onNotReady: () -> Unit = {}) {
+        if (!isActivePage(view, id) || !pageLoad.awaitingReady(id)) return
+        view.evaluateJavascript(
+            """
+            (() => {
+                if (window.__elimPageId !== ${JSONObject.quote(id)} ||
+                    !window.__elimNativeReady ||
+                    typeof window.__elimIsPageReady !== 'function' ||
+                    !window.__elimIsPageReady()) return false;
+                let style = document.getElementById('elim-android-viewport');
+                if (!style) {
+                    style = document.createElement('style');
+                    style.id = 'elim-android-viewport';
+                    style.textContent = 'html,body{height:100vh!important;height:100dvh!important;min-height:100vh;min-height:100dvh}#app{height:100%;min-height:100%}';
+                    document.head.appendChild(style);
+                }
+                if (!window.__elimAndroidLinks) {
+                    document.addEventListener('click', function(event) {
+                        const anchor = event.target.closest && event.target.closest('a[target="_blank"]');
+                        if (anchor) anchor.target = '_self';
+                    }, true);
+                    window.__elimAndroidLinks = true;
+                }
+                return true;
+            })();
+            """.trimIndent()
+        ) { ready ->
+            // Results from a replaced WebView/document must never change this screen.
+            if (isActivePage(view, id) && pageLoad.awaitingReady(id)) {
+                if (ready == "true") {
+                    pageLoad.markReady(id)
+                    cancelLoadTimeout()
+                    updatePageUi()
+                } else {
+                    onNotReady()
+                }
+            }
+        }
+    }
+
+    private fun scheduleLoadTimeout(view: WebView, id: String) {
+        cancelLoadTimeout()
+        loadTimeout = Runnable {
+            if (!isActivePage(view, id) || !pageLoad.awaitingReady(id)) return@Runnable
+            val showDelay = Runnable {
+                if (isActivePage(view, id) && pageLoad.markDelayed(
+                        id, "연결이 지연되고 있습니다. 잠시 기다리거나 다시 시도해 주세요."
+                    )) updatePageUi()
+            }
+            // Bound the probe too, in case the renderer cannot answer JavaScript.
+            readinessTimeout = showDelay
+            handler.postDelayed(showDelay, 1_000)
+            checkPageReady(view, id) {
+                handler.removeCallbacks(showDelay)
+                showDelay.run()
+            }
+            // Do not stopLoading(): the same document can still become ready.
+        }.also { handler.postDelayed(it, 25_000) }
+    }
+
+    private fun loadLatestPage(target: Uri = Uri.parse(APP_URL)) {
         val view = appWebView ?: return
+        val id = UUID.randomUUID().toString()
+        cancelLoadTimeout()
+        pageLoad.begin(id)
+        updatePageUi()
         if (playbackConnection == null) {
-            failPage("Google Play에서 Android 시스템 WebView와 Chrome을 업데이트한 뒤 앱을 다시 열어 주세요.")
+            failPage(id, "Google Play에서 Android 시스템 WebView와 Chrome을 업데이트한 뒤 앱을 다시 열어 주세요.")
             return
         }
-        handler.removeCallbacks(loadTimeout)
+        playbackConnection?.beginPage(id)
+        // Invalidate the previous document before stopLoading can deliver callbacks.
         view.stopLoading()
-        mainFrameFailed = false
-        pageError = null
-        loading = true
-        // Fresh document URL; same origin preserves website localStorage.
-        val latest = Uri.parse(APP_URL).buildUpon()
-            .appendQueryParameter("_app_reload", System.currentTimeMillis().toString())
-            .build().toString()
+        // A unique URL binds native callbacks and bridge messages to one navigation.
+        // Preserve the site's own query parameters and same-origin localStorage.
+        val builder = target.buildUpon().clearQuery()
+        target.queryParameterNames.filter { it != "_app_reload" }.forEach { name ->
+            target.getQueryParameters(name).forEach { builder.appendQueryParameter(name, it) }
+        }
+        val latest = builder.appendQueryParameter("_app_reload", id).build().toString()
+        scheduleLoadTimeout(view, id)
         view.loadUrl(latest, mapOf("Cache-Control" to "no-cache"))
-        handler.postDelayed(loadTimeout, 25_000)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -152,7 +237,12 @@ class MainActivity : ComponentActivity() {
                                     override fun shouldOverrideUrlLoading(
                                         view: WebView, request: WebResourceRequest
                                     ): Boolean {
-                                        if (isAppPage(request.url)) return false
+                                        if (isAppPage(request.url)) {
+                                            if (!request.isForMainFrame) return false
+                                            // App-owned navigations also receive a fresh page ID.
+                                            if (appWebView === view) loadLatestPage(request.url)
+                                            return true
+                                        }
                                         if (request.isForMainFrame && request.hasGesture() &&
                                             request.url.scheme in listOf("https", "http", "mailto", "tel")) {
                                             try {
@@ -164,20 +254,12 @@ class MainActivity : ComponentActivity() {
                                         return true
                                     }
 
-                                    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                                        playbackConnection?.markPageLoading()
-                                        mainFrameFailed = false
-                                        loading = true
-                                        pageError = null
-                                        handler.removeCallbacks(loadTimeout)
-                                        handler.postDelayed(loadTimeout, 25_000)
-                                    }
-
                                     override fun onReceivedError(
                                         view: WebView, request: WebResourceRequest, error: WebResourceError
                                     ) {
                                         if (request.isForMainFrame) {
-                                            failPage("인터넷 연결을 확인한 뒤 다시 시도해 주세요. (오류 ${error.errorCode})")
+                                            val id = pageIdFor(view, request.url.toString()) ?: return
+                                            failPage(id, "인터넷 연결을 확인한 뒤 다시 시도해 주세요. (오류 ${error.errorCode})")
                                         }
                                     }
 
@@ -185,7 +267,8 @@ class MainActivity : ComponentActivity() {
                                         view: WebView, request: WebResourceRequest, response: WebResourceResponse
                                     ) {
                                         if (request.isForMainFrame) {
-                                            failPage("웹페이지에 연결할 수 없습니다. (HTTP ${response.statusCode})")
+                                            val id = pageIdFor(view, request.url.toString()) ?: return
+                                            failPage(id, "웹페이지에 연결할 수 없습니다. (HTTP ${response.statusCode})")
                                         }
                                     }
 
@@ -193,66 +276,49 @@ class MainActivity : ComponentActivity() {
                                         view: WebView, sslHandler: SslErrorHandler, error: SslError
                                     ) {
                                         sslHandler.cancel()
-                                        if (error.url == view.url) failPage("보안 연결을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+                                        if (error.url == view.url) {
+                                            val id = pageIdFor(view, error.url) ?: return
+                                            failPage(id, "보안 연결을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+                                        }
                                     }
 
                                     override fun onRenderProcessGone(
                                         view: WebView, detail: RenderProcessGoneDetail
                                     ): Boolean {
                                         (view.parent as? ViewGroup)?.removeView(view)
-                                        playbackConnection?.release()
-                                        playbackConnection = null
-                                        if (appWebView === view) appWebView = null
+                                        if (appWebView === view) {
+                                            pageLoad.pageId?.let { failPage(it, "웹 화면이 종료되었습니다. 다시 시도해 주세요.") }
+                                            playbackConnection?.release()
+                                            playbackConnection = null
+                                            appWebView = null
+                                        }
                                         view.destroy()
-                                        failPage("웹 화면이 종료되었습니다. 다시 시도해 주세요.")
                                         return true
                                     }
 
                                     override fun onPageFinished(view: WebView, url: String) {
-                                        if (mainFrameFailed || !isAppPage(Uri.parse(url))) return
-                                        view.evaluateJavascript(
-                                            """
-                                            (() => {
-                                                let style = document.getElementById('elim-android-viewport');
-                                                if (!style) {
-                                                    style = document.createElement('style');
-                                                    style.id = 'elim-android-viewport';
-                                                    style.textContent = 'html,body{height:100vh!important;height:100dvh!important;min-height:100vh;min-height:100dvh}#app{height:100%;min-height:100%}';
-                                                    document.head.appendChild(style);
-                                                }
-                                                if (!window.__elimAndroidLinks) {
-                                                    document.addEventListener('click', function(event) {
-                                                        const anchor = event.target.closest && event.target.closest('a[target="_blank"]');
-                                                        if (anchor) anchor.target = '_self';
-                                                    }, true);
-                                                    window.__elimAndroidLinks = true;
-                                                }
-                                                const main = document.getElementById('main-content');
-                                                return !!window.__elimNativeReady && !!document.body && (main ? main.children.length > 0 : document.body.innerText.trim().length > 0);
-                                            })();
-                                            """.trimIndent()
-                                        ) { ready ->
-                                            if (!mainFrameFailed) {
-                                                handler.removeCallbacks(loadTimeout)
-                                                if (ready == "true") {
-                                                    loading = false
-                                                    pageError = null
-                                                } else {
-                                                    failPage("화면을 준비하지 못했습니다. 다시 시도해 주세요.")
-                                                }
-                                            }
-                                        }
+                                        val id = pageIdFor(view, url) ?: return
+                                        // Fallback only: ready messages do not wait for external assets.
+                                        checkPageReady(view, id)
                                     }
                                 }
                                 if (NativeAudioConnection.isSupported()) {
-                                    playbackConnection = NativeAudioConnection(this) { failPage(it) }
+                                    val view = this
+                                    playbackConnection = NativeAudioConnection(
+                                        view,
+                                        onPageReady = { id -> checkPageReady(view, id) },
+                                        onFailure = { message ->
+                                            if (appWebView === view) pageLoad.pageId?.let { failPage(it, message) }
+                                        }
+                                    )
                                 }
                                 loadLatestPage()
                             }
                         },
                         onRelease = { view ->
-                            handler.removeCallbacks(loadTimeout)
                             if (appWebView === view) {
+                                cancelLoadTimeout()
+                                pageLoad.clear()
                                 playbackConnection?.release()
                                 playbackConnection = null
                                 appWebView = null
@@ -303,5 +369,12 @@ class MainActivity : ComponentActivity() {
         appWebView?.onPause()
         backgroundSince = SystemClock.elapsedRealtime()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        cancelLoadTimeout()
+        pageLoad.clear()
+        playbackConnection?.release()
+        super.onDestroy()
     }
 }
